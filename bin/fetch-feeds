@@ -1,0 +1,110 @@
+#!/usr/bin/env python3
+import datetime
+import email.utils
+import json
+import os
+import sys
+import urllib.request
+import xml.etree.ElementTree as ET
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from urllib.parse import urlparse
+
+CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+CONFIG = CONFIG_HOME / "omarchy-newsfeed" / "feeds.json"
+DEFAULT = [
+    {"name": "Hacker News", "url": "https://news.ycombinator.com/rss"},
+    {"name": "Omarchy News", "url": "https://omarchy.org/news/rss.xml"},
+]
+UA = "omarchy-newsfeed/0.1 (personal reader)"
+ATOM = "{http://www.w3.org/2005/Atom}"
+LIMIT = 15
+MAX_FEEDS = 50
+MAX_BYTES = 2 * 1024 * 1024
+TIMEOUT = 10
+
+
+def is_http(url):
+    parts = urlparse(url)
+    return parts.scheme in ("http", "https") and bool(parts.netloc)
+
+
+def valid_feed(entry):
+    if not isinstance(entry, dict):
+        return None
+    name, url = entry.get("name"), entry.get("url")
+    if not isinstance(name, str) or not isinstance(url, str):
+        return None
+    name, url = name.strip(), url.strip()
+    if not name or not is_http(url):
+        return None
+    return {"name": name, "url": url}
+
+
+def load_feeds():
+    try:
+        raw = json.loads(CONFIG.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return DEFAULT
+    if not isinstance(raw, list):
+        return DEFAULT
+    feeds = [f for f in (valid_feed(e) for e in raw[:MAX_FEEDS]) if f]
+    return feeds or DEFAULT
+
+
+def parse_date(value):
+    if not value:
+        return ""
+    try:
+        return email.utils.parsedate_to_datetime(value).isoformat()
+    except (TypeError, ValueError):
+        pass
+    try:
+        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).isoformat()
+    except ValueError:
+        return ""
+
+
+def make_item(title, url, date):
+    title = (title or "").strip()
+    url = (url or "").strip()
+    if not title or not is_http(url):
+        return None
+    return {"title": title, "url": url, "published": parse_date((date or "").strip())}
+
+
+def parse(data):
+    if b"<!DOCTYPE" in data.upper():
+        raise ValueError("DTD declarations are not allowed")
+    root = ET.fromstring(data)
+    items = []
+    for it in root.iter("item"):  # RSS
+        items.append(make_item(it.findtext("title"), it.findtext("link"), it.findtext("pubDate")))
+    for en in root.iter(ATOM + "entry"):  # Atom
+        links = [l for l in en.findall(ATOM + "link") if l.get("rel", "alternate") == "alternate"]
+        href = links[0].get("href") if links else ""
+        items.append(make_item(en.findtext(ATOM + "title"), href, en.findtext(ATOM + "updated")))
+    return [i for i in items if i][:LIMIT]
+
+
+def fetch(feed):
+    try:
+        req = urllib.request.Request(feed["url"], headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            data = r.read(MAX_BYTES + 1)
+        if len(data) > MAX_BYTES:
+            raise ValueError("feed is larger than 2 MB")
+        return {"name": feed["name"], "items": parse(data), "error": None}
+    except Exception as e:
+        return {"name": feed["name"], "items": [], "error": str(e) or type(e).__name__}
+
+
+def main():
+    feeds = load_feeds()
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        results = list(pool.map(fetch, feeds))
+    sys.stdout.buffer.write(json.dumps(results, ensure_ascii=False).encode("utf-8") + b"\n")
+
+
+if __name__ == "__main__":
+    main()

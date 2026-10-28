@@ -17,7 +17,7 @@ DEFAULT = [
     {"name": "Omarchy News", "url": "https://omarchy.org/news/rss.xml"},
 ]
 UA = "omarchy-newsfeed/0.1 (personal reader)"
-ATOM = "{http://www.w3.org/2005/Atom}"
+ATOM_NS = "{http://www.w3.org/2005/Atom}"
 LIMIT = 15
 MAX_FEEDS = 50
 MAX_BYTES = 2 * 1024 * 1024
@@ -79,12 +79,14 @@ def parse(data):
     root = ET.fromstring(data)
     items = []
     for it in root.iter("item"):  # RSS
-        items.append(make_item(it.findtext("title"), it.findtext("link"), it.findtext("pubDate")))
-    for en in root.iter(ATOM + "entry"):  # Atom
-        links = [l for l in en.findall(ATOM + "link") if l.get("rel", "alternate") == "alternate"]
+        item = make_item(it.findtext("title"), it.findtext("link"), it.findtext("pubDate"))
+        if item: items.append(item)
+    for en in root.iter(ATOM_NS + "entry"):  # Atom
+        links = [l for l in en.findall(ATOM_NS + "link") if l.get("rel", "alternate") == "alternate"]
         href = links[0].get("href") if links else ""
-        items.append(make_item(en.findtext(ATOM + "title"), href, en.findtext(ATOM + "updated")))
-    return [i for i in items if i][:LIMIT]
+        item = make_item(en.findtext(ATOM_NS + "title"), href, en.findtext(ATOM_NS + "updated"))
+        if item: items.append(item)
+    return items[:LIMIT]
 
 
 def fetch(feed):

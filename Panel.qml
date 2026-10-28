@@ -24,6 +24,9 @@ Panel {
   readonly property var barIdentity: hostWidget || root
 
   readonly property color contentForeground: bar ? bar.foreground : Commons.Color.foreground
+  readonly property color dimForeground: Qt.darker(contentForeground, 1.5)
+  readonly property color faintForeground: Qt.darker(contentForeground, 1.9)
+  readonly property color meta: Qt.darker(contentForeground, 1.6)
   readonly property string contentFontFamily: bar ? bar.fontFamily : Style.font.family
 
   readonly property string scriptPath: decodeURIComponent(Qt.resolvedUrl("bin/fetch-feeds").toString().replace(/^file:\/\//, ""))
@@ -35,9 +38,11 @@ Panel {
   property string status: ""
   property string updatedText: ""
 
-  readonly property string headerStatus: root.loading
-    ? (root.feeds.length === 0 ? "Loading…" : "Refreshing…")
-    : (root.status !== "" ? root.status : (root.updatedText !== "" ? "Updated " + root.updatedText : ""))
+  readonly property string headerStatus: {
+    if (root.loading) return root.feeds.length === 0 ? "Loading…" : "Refreshing…"
+    if (root.status !== "") return root.status
+    return root.updatedText !== "" ? "Updated " + root.updatedText : ""
+  }
 
   function open() {
     root.controller.show()
@@ -175,7 +180,7 @@ Panel {
               anchors.verticalCenter: parent.verticalCenter
               textFormat: Text.PlainText
               text: "NEWS"
-              color: Qt.darker(root.contentForeground, 1.5)
+              color: root.dimForeground
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.bodySmall
               font.letterSpacing: 1
@@ -190,7 +195,7 @@ Panel {
               elide: Text.ElideRight
               textFormat: Text.PlainText
               text: root.headerStatus
-              color: Qt.darker(root.contentForeground, 1.5)
+              color: root.dimForeground
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.bodySmall
             }
@@ -215,7 +220,7 @@ Panel {
             wrapMode: Text.WordWrap
             textFormat: Text.PlainText
             text: "No feeds loaded. Press refresh to try again."
-            color: Qt.darker(root.contentForeground, 1.5)
+            color: root.dimForeground
             font.family: root.contentFontFamily
             font.pixelSize: Style.font.body
           }
@@ -235,7 +240,7 @@ Panel {
                 elide: Text.ElideRight
                 textFormat: Text.PlainText
                 text: String(feedSection.modelData.name || "").toUpperCase()
-                color: Qt.darker(root.contentForeground, 1.9)
+                color: root.faintForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.caption
                 font.letterSpacing: 1
@@ -248,7 +253,7 @@ Panel {
                 wrapMode: Text.WordWrap
                 textFormat: Text.PlainText
                 text: "Failed: " + String(feedSection.modelData.error)
-                color: Qt.darker(root.contentForeground, 1.5)
+                color: root.dimForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
               }
@@ -258,7 +263,7 @@ Panel {
                 width: feedSection.width
                 textFormat: Text.PlainText
                 text: "No items"
-                color: Qt.darker(root.contentForeground, 1.5)
+                color: root.dimForeground
                 font.family: root.contentFontFamily
                 font.pixelSize: Style.font.bodySmall
               }
@@ -304,7 +309,7 @@ Panel {
                       width: rowText.width
                       textFormat: Text.PlainText
                       text: root.relativeTime(itemRow.modelData.published)
-                      color: Qt.darker(root.contentForeground, 1.6)
+                      color: root.meta
                       font.family: root.contentFontFamily
                       font.pixelSize: Style.font.caption
                     }

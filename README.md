@@ -14,7 +14,7 @@ Plugin ID: `dangtrungan.newsfeed`
 Install from a git URL, or from a local checkout:
 
 ```sh
-omarchy plugin add <git-url-or-path> --enable
+omarchy plugin add https://github.com/dangtrungan/rss-plugin.git --enable
 ```
 
 Confirm it is listed:

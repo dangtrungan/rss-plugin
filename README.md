@@ -2,7 +2,7 @@
 
 An on-demand RSS and Atom reader for Omarchy 4.x. It adds an icon to the
 right side of the bar. Clicking the icon opens a panel with headlines from
-your feeds, grouped by feed.
+your feeds, newest first, with the source shown beside each time.
 
 Feeds are fetched only when you open the panel or press refresh. There are
 no timers, no background polling, and no network activity at shell startup.

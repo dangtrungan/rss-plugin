@@ -32,6 +32,7 @@ Panel {
   readonly property string scriptPath: decodeURIComponent(Qt.resolvedUrl("bin/fetch-feeds").toString().replace(/^file:\/\//, ""))
 
   property var feeds: []
+  property var items: []
   property var links: []
   property int selectedIndex: 0
   property bool loading: false
@@ -69,15 +70,23 @@ Panel {
       return
     }
 
-    var urls = []
+    var all = []
     for (var i = 0; i < parsed.length; i++) {
       var items = parsed[i].items || []
       for (var j = 0; j < items.length; j++) {
-        items[j].gi = urls.length
-        urls.push(items[j].url)
+        items[j].source = parsed[i].name
+        all.push(items[j])
       }
     }
+    all.sort(function(a, b) { return (Date.parse(b.published) || 0) - (Date.parse(a.published) || 0) })
+
+    var urls = []
+    for (var k = 0; k < all.length; k++) {
+      all[k].gi = k
+      urls.push(all[k].url)
+    }
     root.feeds = parsed
+    root.items = all
     root.links = urls
     root.selectedIndex = Math.min(root.selectedIndex, Math.max(0, urls.length - 1))
     root.status = ""
@@ -226,110 +235,81 @@ Panel {
           }
 
           Repeater {
-            model: root.feeds
+            model: root.feeds.filter(function(f) { return !!f.error })
 
-            Column {
-              id: feedSection
+            Text {
               required property var modelData
-              required property int index
               width: body.width
-              spacing: Style.space(4)
+              wrapMode: Text.WordWrap
+              textFormat: Text.PlainText
+              text: "Failed: " + String(modelData.name) + " (" + String(modelData.error) + ")"
+              color: root.dimForeground
+              font.family: root.contentFontFamily
+              font.pixelSize: Style.font.bodySmall
+            }
+          }
 
-              Text {
-                width: feedSection.width
-                elide: Text.ElideRight
-                textFormat: Text.PlainText
-                text: String(feedSection.modelData.name || "").toUpperCase()
-                color: root.faintForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.caption
-                font.letterSpacing: 1
-                font.bold: true
+          Repeater {
+            model: root.items
+
+            Rectangle {
+              id: itemRow
+              required property var modelData
+
+              width: body.width
+              height: rowText.implicitHeight + Style.space(12)
+              radius: Style.cornerRadius
+              readonly property bool selected: itemRow.modelData.gi === root.selectedIndex
+              color: itemRow.selected
+                ? Style.hoverFillFor(root.contentForeground, Commons.Color.accent)
+                : "transparent"
+
+              onSelectedChanged: if (selected) {
+                var top = mapToItem(scroll.contentItem, 0, 0).y
+                if (itemRow.modelData.gi === 0) scroll.contentY = 0
+                else if (top < scroll.contentY) scroll.contentY = top
+                else if (top + height > scroll.contentY + scroll.height)
+                  scroll.contentY = top + height - scroll.height
               }
 
-              Text {
-                visible: !!feedSection.modelData.error
-                width: feedSection.width
-                wrapMode: Text.WordWrap
-                textFormat: Text.PlainText
-                text: "Failed: " + String(feedSection.modelData.error)
-                color: root.dimForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-              }
+              Column {
+                id: rowText
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Style.space(10)
+                anchors.rightMargin: Style.space(10)
+                spacing: Style.space(2)
 
-              Text {
-                visible: !feedSection.modelData.error && (feedSection.modelData.items || []).length === 0
-                width: feedSection.width
-                textFormat: Text.PlainText
-                text: "No items"
-                color: root.dimForeground
-                font.family: root.contentFontFamily
-                font.pixelSize: Style.font.bodySmall
-              }
-
-              Repeater {
-                model: feedSection.modelData.items || []
-
-                Rectangle {
-                  id: itemRow
-                  required property var modelData
-
-                  width: feedSection.width
-                  height: rowText.implicitHeight + Style.space(12)
-                  radius: Style.cornerRadius
-                  readonly property bool selected: itemRow.modelData.gi === root.selectedIndex
+                Text {
+                  width: rowText.width
+                  wrapMode: Text.WordWrap
+                  textFormat: Text.PlainText
+                  text: String(itemRow.modelData.title || "")
                   color: itemRow.selected
-                    ? Style.hoverFillFor(root.contentForeground, Commons.Color.accent)
-                    : "transparent"
-
-                  onSelectedChanged: if (selected) {
-                    var top = mapToItem(scroll.contentItem, 0, 0).y
-                    if (top < scroll.contentY) scroll.contentY = top
-                    else if (top + height > scroll.contentY + scroll.height)
-                      scroll.contentY = top + height - scroll.height
-                  }
-
-                  Column {
-                    id: rowText
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: Style.space(10)
-                    anchors.rightMargin: Style.space(10)
-                    spacing: Style.space(2)
-
-                    Text {
-                      width: rowText.width
-                      wrapMode: Text.WordWrap
-                      textFormat: Text.PlainText
-                      text: String(itemRow.modelData.title || "")
-                      color: itemRow.selected
-                        ? Style.hoverStateColor(root.contentForeground, Commons.Color.accent)
-                        : root.contentForeground
-                      font.family: root.contentFontFamily
-                      font.pixelSize: Style.font.body
-                    }
-
-                    Text {
-                      visible: text !== ""
-                      width: rowText.width
-                      textFormat: Text.PlainText
-                      text: root.relativeTime(itemRow.modelData.published)
-                      color: root.meta
-                      font.family: root.contentFontFamily
-                      font.pixelSize: Style.font.caption
-                    }
-                  }
-
-                  MouseArea {
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onEntered: root.selectedIndex = itemRow.modelData.gi
-                    onClicked: root.openUrl(itemRow.modelData.url)
-                  }
+                    ? Style.hoverStateColor(root.contentForeground, Commons.Color.accent)
+                    : root.contentForeground
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.body
                 }
+
+                Text {
+                  visible: text.trim() !== ""
+                  width: rowText.width
+                  textFormat: Text.PlainText
+                  text: root.relativeTime(itemRow.modelData.published) + "  " + String(itemRow.modelData.source || "")
+                  color: root.meta
+                  font.family: root.contentFontFamily
+                  font.pixelSize: Style.font.caption
+                }
+              }
+
+              MouseArea {
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onEntered: root.selectedIndex = itemRow.modelData.gi
+                onClicked: root.openUrl(itemRow.modelData.url)
               }
             }
           }

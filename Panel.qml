@@ -283,6 +283,13 @@ Panel {
                     ? Style.hoverFillFor(root.contentForeground, Commons.Color.accent)
                     : "transparent"
 
+                  onSelectedChanged: if (selected) {
+                    var top = mapToItem(scroll.contentItem, 0, 0).y
+                    if (top < scroll.contentY) scroll.contentY = top
+                    else if (top + height > scroll.contentY + scroll.height)
+                      scroll.contentY = top + height - scroll.height
+                  }
+
                   Column {
                     id: rowText
                     anchors.left: parent.left

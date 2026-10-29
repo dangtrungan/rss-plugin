@@ -90,6 +90,11 @@ class ReadStateTest(FilesTest):
         ff.unmark_read(["https://a.test/1", "https://a.test/9"])
         self.assertEqual(ff.load_seen(), ["https://a.test/2"])
 
+    def test_read_state_is_private(self):
+        ff.mark_read(["https://a.test/1"])
+        self.assertEqual(ff.SEEN.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(ff.SEEN.parent.stat().st_mode & 0o777, 0o700)
+
 
 class FeedEditTest(FilesTest):
     def test_add_creates_file_from_defaults_and_keeps_them(self):

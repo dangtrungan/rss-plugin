@@ -3,6 +3,7 @@
 // qmllint disable missing-property
 import QtQuick
 import qs.Commons
+import qs.Commons as Commons
 import qs.Ui
 
 BarWidget {
@@ -32,7 +33,9 @@ BarWidget {
     if (panelLoader.item) panelLoader.item.toggle()
   }
 
-  implicitWidth: button.implicitWidth
+  readonly property int unread: panelLoader.item ? panelLoader.item.unreadCount : 0
+
+  implicitWidth: button.implicitWidth + badge.width
   implicitHeight: button.implicitHeight
 
   onBarChanged: injectPanel()
@@ -52,14 +55,29 @@ BarWidget {
 
   BarIconButton {
     id: button
-    anchors.fill: parent
+    anchors.left: parent.left
+    anchors.top: parent.top
+    anchors.bottom: parent.bottom
+    width: implicitWidth
     bar: root.bar
     text: "\uf09e"
     slotSize: Style.bar.statusSlot
-    tooltipText: "News Feed"
+    tooltipText: root.unread > 0 ? "News Feed, " + root.unread + " unread" : "News Feed"
 
     onPressed: function(b) {
       if (b === Qt.LeftButton) root.togglePanel()
     }
+  }
+
+  Text {
+    id: badge
+    anchors.left: button.right
+    anchors.verticalCenter: parent.verticalCenter
+    width: visible ? implicitWidth + Style.space(4) : 0
+    visible: !root.vertical && root.unread > 0
+    text: root.unread > 99 ? "99+" : String(root.unread)
+    color: root.bar ? root.bar.barForeground : Commons.Color.foreground
+    font.family: root.bar ? root.bar.fontFamily : Style.font.family
+    font.pixelSize: Style.font.caption
   }
 }

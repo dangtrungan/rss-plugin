@@ -14,14 +14,17 @@ CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 CONFIG = CONFIG_HOME / "omarchy-newsfeed" / "feeds.json"
 CACHE_HOME = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
 CACHE = CACHE_HOME / "omarchy-newsfeed" / "cache.json"
+SEEN = CACHE_HOME / "omarchy-newsfeed" / "seen.json"
 DEFAULT = [
     {"name": "Hacker News", "url": "https://news.ycombinator.com/rss"},
     {"name": "Omarchy News", "url": "https://omarchy.org/news/rss.xml"},
 ]
-UA = "omarchy-newsfeed/0.2 (personal reader)"
+UA = "omarchy-newsfeed/0.3 (personal reader)"
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 LIMIT = 15
+MAX_LIMIT = 50
 MAX_FEEDS = 50
+MAX_SEEN = 2000
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 10
 
@@ -43,15 +46,68 @@ def valid_feed(entry):
     return {"name": name, "url": url}
 
 
-def load_feeds():
+def read_config():
+    """Return (raw entries, error). A missing file or one with no valid feeds means the defaults."""
     try:
         raw = json.loads(CONFIG.read_text(encoding="utf-8"))
-    except (OSError, ValueError):
-        return DEFAULT
+    except FileNotFoundError:
+        return [dict(f) for f in DEFAULT], None
+    except OSError as e:
+        return None, str(e)
+    except ValueError:
+        return None, "feeds.json is not valid JSON"
     if not isinstance(raw, list):
+        return None, "feeds.json must be a JSON list"
+    if not any(valid_feed(e) for e in raw):
+        return [dict(f) for f in DEFAULT], None
+    return raw, None
+
+
+def load_feeds():
+    raw, error = read_config()
+    if error:
         return DEFAULT
     feeds = [f for f in (valid_feed(e) for e in raw[:MAX_FEEDS]) if f]
     return feeds or DEFAULT
+
+
+def fail(message):
+    return {"ok": False, "error": message}
+
+
+def save_feeds(entries):
+    try:
+        write_json(CONFIG, entries, indent=2)
+    except OSError as e:
+        return fail(str(e))
+    return {"ok": True}
+
+
+def add_feed(url):
+    url = url.strip()
+    if not is_http(url):
+        return fail("URL must start with http:// or https://")
+    entries, error = read_config()
+    if error:
+        return fail(error)
+    if len(entries) >= MAX_FEEDS:
+        return fail("feeds.json already has %d feeds" % MAX_FEEDS)
+    if any(isinstance(e, dict) and e.get("url") == url for e in entries):
+        return fail("That feed is already in feeds.json")
+    entries.append({"name": urlparse(url).netloc, "url": url})
+    return save_feeds(entries)
+
+
+def remove_feed(url):
+    entries, error = read_config()
+    if error:
+        return fail(error)
+    kept = [e for e in entries if not (isinstance(e, dict) and e.get("url") == url)]
+    if len(kept) == len(entries):
+        return fail("That feed is not in feeds.json")
+    if not any(valid_feed(e) for e in kept):
+        return fail("Keep at least one feed")
+    return save_feeds(kept)
 
 
 def utc_iso(dt):
@@ -81,7 +137,7 @@ def make_item(title, url, date):
     return {"title": title, "url": url, "published": parse_date((date or "").strip())}
 
 
-def parse(data):
+def parse(data, limit=LIMIT):
     if b"<!DOCTYPE" in data.upper():
         raise ValueError("DTD declarations are not allowed")
     root = ET.fromstring(data)
@@ -94,58 +150,100 @@ def parse(data):
         href = links[0].get("href") if links else ""
         item = make_item(en.findtext(ATOM_NS + "title"), href, en.findtext(ATOM_NS + "updated"))
         if item: items.append(item)
-    return items[:LIMIT]
+    return items[:limit]
 
 
-def fetch(feed):
+def fetch(feed, limit=LIMIT):
     try:
         req = urllib.request.Request(feed["url"], headers={"User-Agent": UA})
         with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
             data = r.read(MAX_BYTES + 1)
         if len(data) > MAX_BYTES:
             raise ValueError("feed is larger than 2 MB")
-        return {"name": feed["name"], "items": parse(data), "error": None}
+        return {"name": feed["name"], "items": parse(data, limit), "error": None}
     except Exception as e:
         return {"name": feed["name"], "items": [], "error": str(e) or type(e).__name__}
 
 
-def load_cache():
+def write_json(path, data, indent=None):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(json.dumps(data, ensure_ascii=False, indent=indent), encoding="utf-8")
+    tmp.replace(path)
+
+
+def load_list(path):
     try:
-        raw = json.loads(CACHE.read_text(encoding="utf-8"))
+        raw = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return []
     if not isinstance(raw, list):
         return []
-    return [f for f in raw if isinstance(f, dict) and isinstance(f.get("items"), list)]
+    return raw
+
+
+def load_cache():
+    return [f for f in load_list(CACHE) if isinstance(f, dict) and isinstance(f.get("items"), list)]
 
 
 def save_cache(entries):
     try:
-        CACHE.parent.mkdir(parents=True, exist_ok=True)
-        tmp = CACHE.with_name(CACHE.name + ".tmp")
-        tmp.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
-        tmp.replace(CACHE)
+        write_json(CACHE, entries)
     except OSError:
         pass
 
 
-def run(feeds):
+def load_seen():
+    return [u for u in load_list(SEEN) if isinstance(u, str)]
+
+
+def mark_read(urls):
+    seen = load_seen()
+    known = set(seen)
+    seen += [u for u in dict.fromkeys(u.strip() for u in urls) if is_http(u) and u not in known]
+    try:
+        write_json(SEEN, seen[-MAX_SEEN:])
+    except OSError as e:
+        return fail(str(e))
+    return {"ok": True}
+
+
+def run(feeds, limit=LIMIT):
     with ThreadPoolExecutor(max_workers=8) as pool:
-        results = list(pool.map(fetch, feeds))
+        results = list(pool.map(lambda f: fetch(f, limit), feeds))
     old = {f["name"]: f["items"] for f in load_cache()}
-    for r in results:
+    for feed, r in zip(feeds, results):
+        r["url"] = feed["url"]
         if r["error"] and r["name"] in old:
             r["items"] = old[r["name"]]
-    save_cache([{"name": r["name"], "items": r["items"]} for r in results])
+    save_cache([{"name": r["name"], "url": r["url"], "items": r["items"]} for r in results])
     return results
 
 
+def parse_limit(args):
+    try:
+        n = int(args[args.index("--limit") + 1])
+    except (ValueError, IndexError):
+        return LIMIT
+    return max(1, min(MAX_LIMIT, n))
+
+
 def main():
-    if "--cached" in sys.argv[1:]:
-        results = load_cache()
+    args = sys.argv[1:]
+    cmd = args[0] if args else ""
+    if cmd == "--cached":
+        out = load_cache()
+    elif cmd == "--seen":
+        out = load_seen()
+    elif cmd == "--mark-read":
+        out = mark_read(args[1:])
+    elif cmd == "--add-feed":
+        out = add_feed(args[1] if len(args) > 1 else "")
+    elif cmd == "--remove-feed":
+        out = remove_feed(args[1] if len(args) > 1 else "")
     else:
-        results = run(load_feeds())
-    sys.stdout.buffer.write(json.dumps(results, ensure_ascii=False).encode("utf-8") + b"\n")
+        out = run(load_feeds(), parse_limit(args))
+    sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode("utf-8") + b"\n")
 
 
 if __name__ == "__main__":

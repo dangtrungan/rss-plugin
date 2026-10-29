@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import sys
 import tempfile
 import unittest
 import unittest.mock
@@ -98,6 +99,18 @@ class ReadStateTest(FilesTest):
         ff.mark_read(["https://a.test/1"])
         self.assertEqual(ff.SEEN.stat().st_mode & 0o777, 0o600)
         self.assertEqual(ff.SEEN.parent.stat().st_mode & 0o777, 0o700)
+
+    def test_startup_read_tightens_old_files(self):
+        ff.CACHE.write_text("[]")
+        ff.SEEN.write_text('["https://a.test/1"]')
+        os.chmod(ff.CACHE, 0o644)
+        os.chmod(ff.SEEN, 0o644)
+        os.chmod(self.tmp.name, 0o755)
+        with unittest.mock.patch.object(sys, "argv", ["fetch-feeds", "--seen"]), unittest.mock.patch("sys.stdout"):
+            ff.main()
+        self.assertEqual(ff.SEEN.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(ff.CACHE.stat().st_mode & 0o777, 0o600)
+        self.assertEqual(pathlib.Path(self.tmp.name).stat().st_mode & 0o777, 0o700)
 
 
 class FeedEditTest(FilesTest):

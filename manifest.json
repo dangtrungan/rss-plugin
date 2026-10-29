@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "dangtrungan.newsfeed",
   "name": "News Feed",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "author": "Dang Trung An",
   "description": "On-demand RSS and Atom headlines in a bar panel",
   "kinds": [

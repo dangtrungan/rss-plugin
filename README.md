@@ -59,12 +59,20 @@ other than the defaults.
   load.
 - The last headlines are cached in `~/.cache/omarchy-newsfeed/cache.json`
   (or `$XDG_CACHE_HOME`). Opening the panel shows them right away while the
-  feeds refresh, and a feed that fails keeps its cached headlines.
+  feeds refresh. A feed that fails keeps its cached headlines until it
+  recovers or is removed from your feed config. Cached headlines never expire
+  on their own.
 
 ## Requirements
 
 - Python 3 (standard library only, no packages to install)
 - `xdg-open` to open headlines in a browser
+
+## Tests
+
+```sh
+python3 -m unittest discover -s tests
+```
 
 ## Removal
 

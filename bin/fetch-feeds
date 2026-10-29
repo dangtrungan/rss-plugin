@@ -18,7 +18,7 @@ DEFAULT = [
     {"name": "Hacker News", "url": "https://news.ycombinator.com/rss"},
     {"name": "Omarchy News", "url": "https://omarchy.org/news/rss.xml"},
 ]
-UA = "omarchy-newsfeed/0.1 (personal reader)"
+UA = "omarchy-newsfeed/0.2 (personal reader)"
 ATOM_NS = "{http://www.w3.org/2005/Atom}"
 LIMIT = 15
 MAX_FEEDS = 50

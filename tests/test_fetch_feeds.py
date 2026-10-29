@@ -1,6 +1,7 @@
 import importlib.machinery
 import importlib.util
 import json
+import os
 import pathlib
 import tempfile
 import unittest
@@ -91,6 +92,9 @@ class ReadStateTest(FilesTest):
         self.assertEqual(ff.load_seen(), ["https://a.test/2"])
 
     def test_read_state_is_private(self):
+        old = os.umask(0o022)
+        self.addCleanup(os.umask, old)
+        ff.SEEN = pathlib.Path(self.tmp.name) / "new" / "seen.json"
         ff.mark_read(["https://a.test/1"])
         self.assertEqual(ff.SEEN.stat().st_mode & 0o777, 0o600)
         self.assertEqual(ff.SEEN.parent.stat().st_mode & 0o777, 0o700)

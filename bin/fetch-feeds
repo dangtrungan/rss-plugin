@@ -225,7 +225,16 @@ def unmark_read(urls):
     return update_seen(urls, False)
 
 
+def tighten_old_files():
+    for path in (CACHE, SEEN):
+        try:
+            os.chmod(path, 0o600)
+        except OSError:
+            pass
+
+
 def run(feeds, limit=LIMIT):
+    tighten_old_files()
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda f: fetch(f, limit), feeds))
     old = {f["name"]: f["items"] for f in load_cache()}

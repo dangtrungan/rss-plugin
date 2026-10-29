@@ -12,6 +12,8 @@ from urllib.parse import urlparse
 
 CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 CONFIG = CONFIG_HOME / "omarchy-newsfeed" / "feeds.json"
+CACHE_HOME = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+CACHE = CACHE_HOME / "omarchy-newsfeed" / "cache.json"
 DEFAULT = [
     {"name": "Hacker News", "url": "https://news.ycombinator.com/rss"},
     {"name": "Omarchy News", "url": "https://omarchy.org/news/rss.xml"},
@@ -101,10 +103,42 @@ def fetch(feed):
         return {"name": feed["name"], "items": [], "error": str(e) or type(e).__name__}
 
 
-def main():
-    feeds = load_feeds()
+def load_cache():
+    try:
+        raw = json.loads(CACHE.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(raw, list):
+        return []
+    return [f for f in raw if isinstance(f, dict) and isinstance(f.get("items"), list)]
+
+
+def save_cache(entries):
+    try:
+        CACHE.parent.mkdir(parents=True, exist_ok=True)
+        tmp = CACHE.with_name(CACHE.name + ".tmp")
+        tmp.write_text(json.dumps(entries, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(CACHE)
+    except OSError:
+        pass
+
+
+def run(feeds):
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(fetch, feeds))
+    old = {f["name"]: f["items"] for f in load_cache()}
+    for r in results:
+        if r["error"] and r["name"] in old:
+            r["items"] = old[r["name"]]
+    save_cache([{"name": r["name"], "items": r["items"]} for r in results])
+    return results
+
+
+def main():
+    if "--cached" in sys.argv[1:]:
+        results = load_cache()
+    else:
+        results = run(load_feeds())
     sys.stdout.buffer.write(json.dumps(results, ensure_ascii=False).encode("utf-8") + b"\n")
 
 

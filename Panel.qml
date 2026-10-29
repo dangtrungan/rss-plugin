@@ -36,6 +36,7 @@ Panel {
   property var links: []
   property int selectedIndex: 0
   property bool loading: false
+  property bool liveDone: false
   property string status: ""
   property string updatedText: ""
 
@@ -47,6 +48,7 @@ Panel {
 
   function open() {
     root.controller.show()
+    if (root.items.length === 0 && !cacheProc.running) cacheProc.running = true
     root.refresh()
   }
 
@@ -54,19 +56,20 @@ Panel {
     if (fetchProc.running) return
     root.loading = true
     root.status = ""
+    root.liveDone = false
     fetchProc.running = true
   }
 
-  function applyResults(raw) {
+  function applyResults(raw, cached) {
     var parsed = null
     try {
       parsed = JSON.parse(String(raw || "").trim())
     } catch (e) {
       parsed = null
     }
-    root.loading = false
+    if (!cached) root.loading = false
     if (!Array.isArray(parsed)) {
-      root.status = "Unexpected output from fetch-feeds"
+      if (!cached) root.status = "Unexpected output from fetch-feeds"
       return
     }
 
@@ -89,6 +92,8 @@ Panel {
     root.items = all
     root.links = urls
     root.selectedIndex = Math.min(root.selectedIndex, Math.max(0, urls.length - 1))
+    if (cached) return
+    root.liveDone = true
     root.status = ""
     root.updatedText = Qt.formatTime(new Date(), "HH:mm")
   }
@@ -124,11 +129,20 @@ Panel {
   }
 
   Process {
+    id: cacheProc
+    command: ["python3", root.scriptPath, "--cached"]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: if (!root.liveDone) root.applyResults(text, true)
+    }
+  }
+
+  Process {
     id: fetchProc
     command: ["python3", root.scriptPath]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.applyResults(text)
+      onStreamFinished: root.applyResults(text, false)
     }
     onExited: function(exitCode) {
       if (exitCode !== 0) {

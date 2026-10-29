@@ -57,6 +57,9 @@ other than the defaults.
   selected headline, `r` refreshes, `Esc` closes.
 - A feed that fails shows its error under its own name. The other feeds still
   load.
+- The last headlines are cached in `~/.cache/omarchy-newsfeed/cache.json`
+  (or `$XDG_CACHE_HOME`). Opening the panel shows them right away while the
+  feeds refresh, and a feed that fails keeps its cached headlines.
 
 ## Requirements
 

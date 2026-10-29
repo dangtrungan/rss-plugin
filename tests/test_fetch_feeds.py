@@ -85,6 +85,11 @@ class ReadStateTest(FilesTest):
             ff.mark_read(["https://a.test/4"])
         self.assertEqual(ff.load_seen(), ["https://a.test/3", "https://a.test/4"])
 
+    def test_unmark_removes_only_given_urls(self):
+        ff.mark_read(["https://a.test/1", "https://a.test/2"])
+        ff.unmark_read(["https://a.test/1", "https://a.test/9"])
+        self.assertEqual(ff.load_seen(), ["https://a.test/2"])
+
 
 class FeedEditTest(FilesTest):
     def test_add_creates_file_from_defaults_and_keeps_them(self):

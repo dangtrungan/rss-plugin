@@ -197,15 +197,28 @@ def load_seen():
     return [u for u in load_list(SEEN) if isinstance(u, str)]
 
 
-def mark_read(urls):
+def update_seen(urls, mark):
     seen = load_seen()
-    known = set(seen)
-    seen += [u for u in dict.fromkeys(u.strip() for u in urls) if is_http(u) and u not in known]
+    urls = [u.strip() for u in urls]
+    if mark:
+        known = set(seen)
+        seen += [u for u in dict.fromkeys(urls) if is_http(u) and u not in known]
+    else:
+        drop = set(urls)
+        seen = [u for u in seen if u not in drop]
     try:
         write_json(SEEN, seen[-MAX_SEEN:])
     except OSError as e:
         return fail(str(e))
     return {"ok": True}
+
+
+def mark_read(urls):
+    return update_seen(urls, True)
+
+
+def unmark_read(urls):
+    return update_seen(urls, False)
 
 
 def run(feeds, limit=LIMIT):
@@ -237,6 +250,8 @@ def main():
         out = load_seen()
     elif cmd == "--mark-read":
         out = mark_read(args[1:])
+    elif cmd == "--unmark-read":
+        out = unmark_read(args[1:])
     elif cmd == "--add-feed":
         out = add_feed(args[1] if len(args) > 1 else "")
     elif cmd == "--remove-feed":

@@ -138,22 +138,48 @@ Panel {
     var next = Object.assign({}, root.seen)
     for (var i = 0; i < urls.length; i++) next[urls[i]] = true
     root.seen = next
-    root.pendingMarks = root.pendingMarks.concat(urls)
+    root.queueSeen("--mark-read", urls)
+  }
+
+  function unmarkRead(urls) {
+    var next = Object.assign({}, root.seen)
+    for (var i = 0; i < urls.length; i++) delete next[urls[i]]
+    root.seen = next
+    root.queueSeen("--unmark-read", urls)
+  }
+
+  // One read-state write at a time, in the order they were requested, so a
+  // mark and an unmark of the same headline cannot swap places.
+  function queueSeen(flag, urls) {
+    root.pendingMarks = root.pendingMarks.concat([{ flag: flag, urls: urls }])
     root.flushMarks()
   }
 
-  // One mark process at a time. Marks that arrive meanwhile are sent together
-  // by the next run, so none are lost.
   function flushMarks() {
     if (markProc.running || root.pendingMarks.length === 0) return
-    markProc.command = ["python3", root.scriptPath, "--mark-read"].concat(root.pendingMarks)
-    root.pendingMarks = []
+    var job = root.pendingMarks[0]
+    root.pendingMarks = root.pendingMarks.slice(1)
+    markProc.command = ["python3", root.scriptPath, job.flag].concat(job.urls)
     markProc.running = true
   }
 
   function markAll() {
-    root.markRead(root.items.map(function(i) { return i.url }))
+    root.markRead(root.items.map(function(i) { return String(i.url) }))
     root.status = "Marked all read"
+  }
+
+  function unmarkItem() {
+    var item = root.shown[root.selectedIndex]
+    if (!root.managing && item) root.unmarkRead([String(item.url)])
+  }
+
+  function unmarkSource() {
+    var item = root.shown[root.selectedIndex]
+    if (root.managing || !item) return
+    var urls = root.items.filter(function(i) { return i.source === item.source })
+      .map(function(i) { return String(i.url) })
+    root.unmarkRead(urls)
+    root.status = "Unmarked " + urls.length + " from " + item.source
   }
 
   function moveSelection(delta) {
@@ -335,8 +361,10 @@ Panel {
       onTabRequested: function(direction) { root.switchPanel(direction) }
       onTextKey: function(t) {
         var key = t.toLowerCase()
-        if (key === "r") root.refresh()
+        if (t === "U") root.unmarkSource()
+        else if (key === "r") root.refresh()
         else if (key === "m") root.markAll()
+        else if (key === "u") root.unmarkItem()
         else if (key === "o") root.openUnread()
         else if (key === "f") root.toggleManage()
         else if (key === "a") root.startAdd()

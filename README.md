@@ -81,6 +81,8 @@ field to the plugin's entry in `~/.config/omarchy/shell.json`, for example
   - `Enter` opens the selected headline.
   - `r` refreshes.
   - `m` marks all headlines read.
+  - `u` marks the selected headline unread again.
+  - `U` marks every headline from the selected headline's source unread.
   - `o` opens up to 10 unread headlines in your browser and marks them read.
   - `/` filters headlines by title or source. In the filter, `Enter` keeps the
     filter and `Esc` clears it.

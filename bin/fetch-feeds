@@ -54,15 +54,21 @@ def load_feeds():
     return feeds or DEFAULT
 
 
+def utc_iso(dt):
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=datetime.timezone.utc)
+    return dt.astimezone(datetime.timezone.utc).isoformat(timespec="seconds")
+
+
 def parse_date(value):
     if not value:
         return ""
     try:
-        return email.utils.parsedate_to_datetime(value).isoformat()
+        return utc_iso(email.utils.parsedate_to_datetime(value))
     except (TypeError, ValueError):
         pass
     try:
-        return datetime.datetime.fromisoformat(value.replace("Z", "+00:00")).isoformat()
+        return utc_iso(datetime.datetime.fromisoformat(value.replace("Z", "+00:00")))
     except ValueError:
         return ""
 

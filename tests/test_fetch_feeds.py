@@ -12,6 +12,18 @@ ff = importlib.util.module_from_spec(spec)
 loader.exec_module(ff)
 
 
+class ParseDateTest(unittest.TestCase):
+    def test_dates_are_utc_seconds_for_js(self):
+        self.assertEqual(ff.parse_date("Tue, 01 Jan 2024 12:00:00 GMT"), "2024-01-01T12:00:00+00:00")
+        self.assertEqual(ff.parse_date("2024-01-01T14:00:00.123456+02:00"), "2024-01-01T12:00:00+00:00")
+        self.assertEqual(ff.parse_date("2024-01-01T12:00:00.5Z"), "2024-01-01T12:00:00+00:00")
+
+    def test_naive_and_bad_dates(self):
+        self.assertEqual(ff.parse_date("2024-01-01T12:00:00"), "2024-01-01T12:00:00+00:00")
+        self.assertEqual(ff.parse_date("not a date"), "")
+        self.assertEqual(ff.parse_date(""), "")
+
+
 class CacheFallbackTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()

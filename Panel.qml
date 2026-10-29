@@ -94,6 +94,11 @@ Panel {
     }
   }
 
+  function domainOf(url) {
+    var m = /^https?:\/\/([^\/?#]+)/.exec(String(url))
+    return m ? m[1].replace(/^www\./, "") : ""
+  }
+
   function applyResults(raw, cached) {
     var parsed = root.parseList(raw)
     if (!cached) root.loading = false
@@ -106,7 +111,7 @@ Panel {
     for (var i = 0; i < parsed.length; i++) {
       var items = parsed[i].items || []
       for (var j = 0; j < items.length; j++) {
-        items[j].source = parsed[i].name
+        items[j].source = root.domainOf(items[j].url) || parsed[i].name
         all.push(items[j])
       }
     }

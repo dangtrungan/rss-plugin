@@ -3,7 +3,8 @@
 An on-demand RSS and Atom reader for Omarchy 4.x. It adds an icon to the
 right side of the bar, with a count of unread headlines when there are any.
 Clicking the icon opens a panel with headlines from your feeds, newest first,
-with the source shown beside each time.
+with the domain of each article shown beside its time (for example
+`nytimes.com`).
 
 Feeds are fetched only when you open the panel or press refresh. There are
 no timers and no background polling. At shell startup the plugin reads only
@@ -82,9 +83,9 @@ field to the plugin's entry in `~/.config/omarchy/shell.json`, for example
   - `r` refreshes.
   - `m` marks all headlines read.
   - `u` marks the selected headline unread again.
-  - `U` marks every headline from the selected headline's source unread.
+  - `U` marks every headline from the selected headline's domain unread.
   - `o` opens up to 10 unread headlines in your browser and marks them read.
-  - `/` filters headlines by title or source. In the filter, `Enter` keeps the
+  - `/` filters headlines by title or domain. In the filter, `Enter` keeps the
     filter and `Esc` clears it.
   - `f` opens feed management (and `f` again returns to the news list).
   - `Esc` closes the panel.

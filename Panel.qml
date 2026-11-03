@@ -102,6 +102,8 @@ Panel {
   function applyResults(raw, cached) {
     var parsed = root.parseList(raw)
     if (!cached) root.loading = false
+    var notice = root.feedDoneText
+    if (!cached) root.feedDoneText = ""
     if (!parsed) {
       if (!cached) root.status = "Unexpected output from fetch-feeds"
       return
@@ -122,7 +124,7 @@ Panel {
     root.selectedIndex = Math.min(root.selectedIndex, Math.max(0, root.shown.length - 1))
     if (cached) return
     root.liveDone = true
-    root.status = ""
+    root.status = notice
     root.updatedText = Qt.formatTime(new Date(), "HH:mm")
   }
 
@@ -204,7 +206,7 @@ Panel {
 
   // Opens up to 10 unread headlines at once so one key press cannot flood the browser.
   function openUnread() {
-    var urls = root.items.filter(function(i) { return !root.isSeen(i.url) })
+    var urls = root.items.filter(function(i) { return !root.isSeen(i.url) && /^https?:\/\//.test(String(i.url)) })
       .map(function(i) { return String(i.url) })
       .slice(0, 10)
     if (urls.length === 0) {

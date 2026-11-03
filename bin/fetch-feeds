@@ -205,8 +205,8 @@ def update_seen(urls, mark):
     seen = load_seen()
     urls = [u.strip() for u in urls]
     if mark:
-        known = set(seen)
-        seen += [u for u in dict.fromkeys(urls) if is_http(u) and u not in known]
+        new = [u for u in dict.fromkeys(urls) if is_http(u)]
+        seen = [u for u in seen if u not in set(new)] + new
     else:
         drop = set(urls)
         seen = [u for u in seen if u not in drop]
@@ -236,11 +236,11 @@ def tighten_old_files():
 def run(feeds, limit=LIMIT):
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda f: fetch(f, limit), feeds))
-    old = {f["name"]: f["items"] for f in load_cache()}
+    old = {f.get("url"): f["items"] for f in load_cache()}
     for feed, r in zip(feeds, results):
         r["url"] = feed["url"]
-        if r["error"] and r["name"] in old:
-            r["items"] = old[r["name"]]
+        if r["error"] and feed["url"] in old:
+            r["items"] = old[feed["url"]]
     save_cache([{"name": r["name"], "url": r["url"], "items": r["items"]} for r in results])
     return results
 

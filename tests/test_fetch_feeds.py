@@ -57,6 +57,17 @@ class CacheFallbackTest(FilesTest):
         self.assertEqual(results[0]["error"], "timed out")
         self.assertEqual(ff.load_cache(), [{"name": "A", "url": "https://a.test/rss", "items": [item]}])
 
+    def test_fallback_matches_by_url_not_name(self):
+        item = {"title": "Old", "url": "https://a.test/1", "published": ""}
+        ff.save_cache([{"name": "A", "url": "https://a.test/rss", "items": [item]}])
+
+        ff.fetch = lambda f, *_: {"name": f["name"], "items": [], "error": "timed out"}
+        renamed = ff.run([{"name": "Renamed", "url": "https://a.test/rss"}])
+        other = ff.run([{"name": "A", "url": "https://b.test/rss"}])
+
+        self.assertEqual(renamed[0]["items"], [item])
+        self.assertEqual(other[0]["items"], [])
+
     def test_cached_mode_reads_saved_cache(self):
         ff.save_cache([{"name": "A", "items": []}])
         self.assertEqual(ff.load_cache(), [{"name": "A", "items": []}])
@@ -86,6 +97,13 @@ class ReadStateTest(FilesTest):
         with unittest.mock.patch.object(ff, "MAX_SEEN", 2):
             ff.mark_read(["https://a.test/4"])
         self.assertEqual(ff.load_seen(), ["https://a.test/3", "https://a.test/4"])
+
+    def test_reread_headline_is_kept_over_older_reads(self):
+        ff.mark_read(["https://a.test/1", "https://a.test/2"])
+        ff.mark_read(["https://a.test/1"])
+        with unittest.mock.patch.object(ff, "MAX_SEEN", 2):
+            ff.mark_read(["https://a.test/3"])
+        self.assertEqual(ff.load_seen(), ["https://a.test/1", "https://a.test/3"])
 
     def test_unmark_removes_only_given_urls(self):
         ff.mark_read(["https://a.test/1", "https://a.test/2"])

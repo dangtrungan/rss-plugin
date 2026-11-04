@@ -55,7 +55,7 @@ class CacheFallbackTest(FilesTest):
 
         self.assertEqual(results[0]["items"], [item])
         self.assertEqual(results[0]["error"], "timed out")
-        self.assertEqual(ff.load_cache(), [{"name": "A", "url": "https://a.test/rss", "items": [item]}])
+        self.assertEqual(ff.load_cache(), [{"name": "A", "url": "https://a.test/rss", "items": [item], "disabled": False}])
 
     def test_fallback_matches_by_url_not_name(self):
         item = {"title": "Old", "url": "https://a.test/1", "published": ""}
@@ -86,6 +86,44 @@ class LimitTest(unittest.TestCase):
         self.assertEqual(ff.parse_limit(["--limit", "0"]), 1)
         self.assertEqual(ff.parse_limit(["--limit", "x"]), ff.LIMIT)
         self.assertEqual(ff.parse_limit([]), ff.LIMIT)
+
+
+class FeedOptionsTest(FilesTest):
+    def test_limit_and_enabled_are_read_with_safe_defaults(self):
+        self.assertEqual(ff.valid_feed({"name": "A", "url": "https://a.test", "limit": 999})["limit"], ff.MAX_LIMIT)
+        self.assertEqual(ff.valid_feed({"name": "A", "url": "https://a.test", "limit": "5"})["limit"], None)
+        self.assertEqual(ff.valid_feed({"name": "A", "url": "https://a.test", "limit": True})["limit"], None)
+        self.assertTrue(ff.valid_feed({"name": "A", "url": "https://a.test"})["enabled"])
+        self.assertFalse(ff.valid_feed({"name": "A", "url": "https://a.test", "enabled": False})["enabled"])
+
+    def test_disabled_feed_is_not_fetched_and_per_feed_limit_is_used(self):
+        seen = []
+        ff.fetch = lambda f, limit: seen.append((f["name"], limit)) or {"name": f["name"], "items": [], "error": None}
+        results = ff.run([
+            {"name": "On", "url": "https://a.test/rss", "enabled": True, "limit": 3},
+            {"name": "Off", "url": "https://b.test/rss", "enabled": False, "limit": None},
+            {"name": "Plain", "url": "https://c.test/rss"},
+        ], limit=15)
+        self.assertEqual(seen, [("On", 3), ("Plain", 15)])
+        self.assertEqual(results[1], {"name": "Off", "items": [], "error": None, "disabled": True, "url": "https://b.test/rss"})
+
+    def test_toggle_disables_and_enables_and_keeps_one_enabled(self):
+        ff.CONFIG.write_text(json.dumps([
+            {"name": "A", "url": "https://a.test/rss"},
+            {"name": "B", "url": "https://b.test/rss"},
+        ]))
+        self.assertTrue(ff.toggle_feed("https://a.test/rss")["ok"])
+        self.assertFalse(ff.toggle_feed("https://b.test/rss")["ok"])
+        self.assertEqual([f.get("enabled", True) for f in json.loads(ff.CONFIG.read_text())], [False, True])
+        self.assertTrue(ff.toggle_feed("https://a.test/rss")["ok"])
+        self.assertEqual([f.get("enabled", True) for f in json.loads(ff.CONFIG.read_text())], [True, True])
+
+    def test_remove_refuses_when_only_disabled_feeds_would_remain(self):
+        ff.CONFIG.write_text(json.dumps([
+            {"name": "A", "url": "https://a.test/rss"},
+            {"name": "B", "url": "https://b.test/rss", "enabled": False},
+        ]))
+        self.assertFalse(ff.remove_feed("https://a.test/rss")["ok"])
 
 
 class ReadStateTest(FilesTest):
@@ -157,7 +195,7 @@ class FeedEditTest(FilesTest):
     def test_remove_refuses_last_valid_feed(self):
         ff.CONFIG.write_text(json.dumps([{"name": "A", "url": "https://a.test/rss"}]))
         self.assertFalse(ff.remove_feed("https://a.test/rss")["ok"])
-        self.assertEqual(ff.load_feeds(), [{"name": "A", "url": "https://a.test/rss"}])
+        self.assertEqual(ff.load_feeds(), [{"name": "A", "url": "https://a.test/rss", "enabled": True, "limit": None}])
 
     def test_broken_config_is_never_overwritten(self):
         ff.CONFIG.write_text("{ not json, but my notes")

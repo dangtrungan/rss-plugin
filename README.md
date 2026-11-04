@@ -59,6 +59,12 @@ Rules:
 - If the file is missing, is not valid JSON, or has no valid entries, the
   built-in defaults are used: Hacker News and Omarchy News.
 - At most 50 feeds are read. Feeds larger than 2 MB are reported as errors.
+- Two optional fields per feed:
+  - `"enabled": false` keeps the feed in the list, greyed out and labelled
+    `disabled`, without fetching it. Its headlines are hidden.
+  - `"limit": 25` sets how many headlines this feed shows, clamped to 1–50.
+    Without it, the global limit is used (see Settings).
+- At least one feed must be enabled.
 
 The plugin never creates or changes `feeds.json` on its own. It is written
 only when you add or remove a feed in the panel (see below). Those changes
@@ -95,6 +101,7 @@ field to the plugin's entry in `~/.config/omarchy/shell.json`, for example
     The feed is named after its host name. Press `Esc` to cancel.
   - `x` removes the selected feed. Press `x` twice: the first press asks, the
     second removes it.
+  - `t` disables or enables the selected feed.
 - A feed that fails shows its error under its own name. The other feeds still
   load.
 - The last headlines are cached in `~/.cache/omarchy-newsfeed/cache.json`

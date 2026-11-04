@@ -278,6 +278,12 @@ Panel {
     root.feedChange(["--remove-feed", String(feed.url)], "Feed removed")
   }
 
+  function toggleSelected() {
+    var feed = root.managing ? root.feeds[root.selectedIndex] : null
+    if (!feed || !feed.url) return
+    root.feedChange(["--toggle-feed", String(feed.url)], feed.disabled ? "Feed enabled" : "Feed disabled")
+  }
+
   function relativeTime(iso) {
     if (!iso) return ""
     var t = Date.parse(iso)
@@ -375,6 +381,7 @@ Panel {
         else if (key === "o") root.openUnread()
         else if (key === "f") root.toggleManage()
         else if (key === "a") root.startAdd()
+        else if (key === "t") root.toggleSelected()
         else if (key === "/") root.startFilter()
       }
 
@@ -523,6 +530,7 @@ Panel {
               radius: Style.cornerRadius
               readonly property bool selected: itemRow.index === root.selectedIndex
               readonly property bool isRead: !root.managing && root.isSeen(itemRow.modelData.url)
+              readonly property bool isDisabled: root.managing && !!itemRow.modelData.disabled
               color: itemRow.selected
                 ? Style.hoverFillFor(root.contentForeground, Commons.Color.accent)
                 : "transparent"
@@ -551,7 +559,7 @@ Panel {
                   text: root.managing ? String(itemRow.modelData.name || "") : String(itemRow.modelData.title || "")
                   color: itemRow.selected
                     ? Style.hoverStateColor(root.contentForeground, Commons.Color.accent)
-                    : itemRow.isRead ? root.dimForeground : root.contentForeground
+                    : itemRow.isRead || itemRow.isDisabled ? root.dimForeground : root.contentForeground
                   font.family: root.contentFontFamily
                   font.pixelSize: Style.font.body
                 }
@@ -563,7 +571,7 @@ Panel {
                   text: root.managing
                     ? (String(itemRow.modelData.url) === root.pendingRemove
                         ? "Press x again to remove"
-                        : String(itemRow.modelData.url || ""))
+                        : (itemRow.isDisabled ? "disabled  " : "") + String(itemRow.modelData.url || ""))
                     : root.relativeTime(itemRow.modelData.published) + "  " + String(itemRow.modelData.source || "")
                   color: root.meta
                   font.family: root.contentFontFamily

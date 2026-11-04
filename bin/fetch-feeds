@@ -43,7 +43,16 @@ def valid_feed(entry):
     name, url = name.strip(), url.strip()
     if not name or not is_http(url):
         return None
-    return {"name": name, "url": url}
+    limit = entry.get("limit")
+    if isinstance(limit, bool) or not isinstance(limit, int):
+        limit = None
+    else:
+        limit = max(1, min(MAX_LIMIT, limit))
+    return {"name": name, "url": url, "enabled": entry.get("enabled") is not False, "limit": limit}
+
+
+def active(entries):
+    return [f for f in (valid_feed(e) for e in entries) if f and f["enabled"]]
 
 
 def read_config():
@@ -105,9 +114,23 @@ def remove_feed(url):
     kept = [e for e in entries if not (isinstance(e, dict) and e.get("url") == url)]
     if len(kept) == len(entries):
         return fail("That feed is not in feeds.json")
-    if not any(valid_feed(e) for e in kept):
-        return fail("Keep at least one feed")
+    if not active(kept):
+        return fail("Keep at least one enabled feed")
     return save_feeds(kept)
+
+
+def toggle_feed(url):
+    entries, error = read_config()
+    if error:
+        return fail(error)
+    entry = next((e for e in entries if isinstance(e, dict) and e.get("url") == url), None)
+    if entry is None:
+        return fail("That feed is not in feeds.json")
+    turn_on = entry.get("enabled") is False
+    if not turn_on and not [f for f in active(entries) if f["url"] != url]:
+        return fail("Keep at least one enabled feed")
+    entry["enabled"] = turn_on
+    return save_feeds(entries)
 
 
 def utc_iso(dt):
@@ -233,15 +256,21 @@ def tighten_old_files():
             pass
 
 
+def fetch_one(feed, limit):
+    if feed.get("enabled") is False:
+        return {"name": feed["name"], "items": [], "error": None, "disabled": True}
+    return fetch(feed, feed.get("limit") or limit)
+
+
 def run(feeds, limit=LIMIT):
     with ThreadPoolExecutor(max_workers=8) as pool:
-        results = list(pool.map(lambda f: fetch(f, limit), feeds))
+        results = list(pool.map(lambda f: fetch_one(f, limit), feeds))
     old = {f.get("url"): f["items"] for f in load_cache()}
     for feed, r in zip(feeds, results):
         r["url"] = feed["url"]
         if r["error"] and feed["url"] in old:
             r["items"] = old[feed["url"]]
-    save_cache([{"name": r["name"], "url": r["url"], "items": r["items"]} for r in results])
+    save_cache([{"name": r["name"], "url": r["url"], "items": r["items"], "disabled": bool(r.get("disabled"))} for r in results])
     return results
 
 
@@ -269,6 +298,8 @@ def main():
         out = add_feed(args[1] if len(args) > 1 else "")
     elif cmd == "--remove-feed":
         out = remove_feed(args[1] if len(args) > 1 else "")
+    elif cmd == "--toggle-feed":
+        out = toggle_feed(args[1] if len(args) > 1 else "")
     else:
         out = run(load_feeds(), parse_limit(args))
     sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode("utf-8") + b"\n")

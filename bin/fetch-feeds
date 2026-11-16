@@ -4,6 +4,7 @@ import email.utils
 import json
 import os
 import sys
+import time
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -27,6 +28,7 @@ MAX_FEEDS = 50
 MAX_SEEN = 2000
 MAX_BYTES = 2 * 1024 * 1024
 TIMEOUT = 10
+DEADLINE = 20  # shortcut: caps the body download only; connect and headers still use TIMEOUT per socket call, add a true total timeout if hosts stall there
 
 
 def is_http(url):
@@ -174,13 +176,25 @@ def parse(data, limit=LIMIT):
     return items[:limit]
 
 
-def fetch(feed, limit=LIMIT):
-    try:
-        req = urllib.request.Request(feed["url"], headers={"User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            data = r.read(MAX_BYTES + 1)
+def read_body(r, deadline):
+    data = bytearray()
+    while True:
+        if time.monotonic() > deadline:
+            raise TimeoutError("timed out")
+        chunk = r.read(64 * 1024)
+        if not chunk:
+            return bytes(data)
+        data += chunk
         if len(data) > MAX_BYTES:
             raise ValueError("feed is larger than 2 MB")
+
+
+def fetch(feed, limit=LIMIT):
+    try:
+        deadline = time.monotonic() + DEADLINE
+        req = urllib.request.Request(feed["url"], headers={"User-Agent": UA})
+        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+            data = read_body(r, deadline)
         return {"name": feed["name"], "items": parse(data, limit), "error": None}
     except Exception as e:
         return {"name": feed["name"], "items": [], "error": str(e) or type(e).__name__}

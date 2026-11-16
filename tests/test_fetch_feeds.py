@@ -6,6 +6,7 @@ import os
 import pathlib
 import sys
 import tempfile
+import time
 import unittest
 import unittest.mock
 
@@ -14,6 +15,26 @@ loader = importlib.machinery.SourceFileLoader("fetch_feeds", str(SCRIPT))
 spec = importlib.util.spec_from_loader("fetch_feeds", loader)
 ff = importlib.util.module_from_spec(spec)
 loader.exec_module(ff)
+
+
+class ReadBodyTest(unittest.TestCase):
+    class Chunks:
+        def __init__(self, *chunks):
+            self.chunks = list(chunks)
+
+        def read(self, n):
+            return self.chunks.pop(0) if self.chunks else b""
+
+    def test_reads_whole_body(self):
+        self.assertEqual(ff.read_body(self.Chunks(b"ab", b"cd"), time.monotonic() + 5), b"abcd")
+
+    def test_expired_deadline_stops_a_slow_download(self):
+        with self.assertRaisesRegex(TimeoutError, "timed out"):
+            ff.read_body(self.Chunks(b"ab"), time.monotonic() - 1)
+
+    def test_body_over_cap_is_rejected(self):
+        with self.assertRaisesRegex(ValueError, "2 MB"):
+            ff.read_body(self.Chunks(b"x" * (ff.MAX_BYTES + 1)), time.monotonic() + 5)
 
 
 class ParseDateTest(unittest.TestCase):

@@ -59,6 +59,7 @@ Rules:
 - If the file is missing, is not valid JSON, or has no valid entries, the
   built-in defaults are used: Hacker News and Omarchy News.
 - At most 50 feeds are read. Feeds larger than 2 MB are reported as errors.
+  A feed that takes more than 20 seconds to download is reported as a timeout.
 - Two optional fields per feed:
   - `"enabled": false` keeps the feed in the list, greyed out and labelled
     `disabled`, without fetching it. Its headlines are hidden.

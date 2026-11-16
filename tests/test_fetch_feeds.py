@@ -28,7 +28,7 @@ class FixtureTest(unittest.TestCase):
 
     def test_messy_rss(self):
         self.assertEqual(self.load("messy_rss.xml"), [
-            {"title": "Named zone date", "url": "https://example.test/a?utm_source=rss&id=1", "published": "2024-01-01T12:00:00+00:00"},
+            {"title": "Named zone date", "url": "https://example.test/a?id=1", "published": "2024-01-01T12:00:00+00:00"},
             {"title": "No date at all", "url": "https://example.test/b", "published": ""},
             {"title": "ISO fallback date", "url": "https://example.test/c", "published": "2024-01-02T10:00:00+00:00"},
             {"title": "Garbage date", "url": "https://example.test/d", "published": ""},
@@ -251,6 +251,29 @@ class ConditionalTest(FilesTest):
         self.assertEqual(results[0]["items"][0]["title"], "New")
         cached = ff.load_cache()[0]
         self.assertEqual((cached["etag"], cached["modified"]), ('"v2"', "Tue, 02 Jan 2024 00:00:00 GMT"))
+
+
+class CanonicalTest(FilesTest):
+    def test_tracking_parameters_are_removed(self):
+        self.assertEqual(ff.canonical("https://a.test/p?utm_source=x&id=7&fbclid=y&gclid=z"), "https://a.test/p?id=7")
+        self.assertEqual(ff.canonical("https://a.test/p?utm_medium=x"), "https://a.test/p")
+        self.assertEqual(ff.canonical("https://a.test/p"), "https://a.test/p")
+
+    def test_old_read_state_with_tracking_matches_new_urls(self):
+        ff.SEEN.write_text(json.dumps(["https://a.test/1?utm_source=rss"]))
+        self.assertEqual(ff.load_seen(), ["https://a.test/1"])
+        ff.mark_read(["https://a.test/2?utm_source=rss"])
+        ff.unmark_read(["https://a.test/1?utm_source=rss"])
+        self.assertEqual(ff.load_seen(), ["https://a.test/2"])
+
+    def test_same_story_across_feeds_is_shown_once(self):
+        item_a = {"title": "Story", "url": "https://a.test/s", "published": ""}
+        results = [
+            {"name": "A", "items": [item_a, dict(item_a)]},
+            {"name": "B", "items": [dict(item_a, title="Same")]},
+        ]
+        ff.dedupe(results)
+        self.assertEqual([len(r["items"]) for r in results], [1, 0])
 
 
 class ReadStateTest(FilesTest):

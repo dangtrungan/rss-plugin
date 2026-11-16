@@ -10,7 +10,7 @@ import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 
 CONFIG_HOME = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
 CONFIG = CONFIG_HOME / "omarchy-newsfeed" / "feeds.json"
@@ -153,13 +153,20 @@ def parse_date(value):
         return ""
 
 
+def canonical(url):
+    parts = urlparse(url)
+    query = [(k, v) for k, v in parse_qsl(parts.query, keep_blank_values=True)
+             if not k.startswith("utm_") and k not in ("fbclid", "gclid")]
+    return urlunparse(parts._replace(query=urlencode(query)))
+
+
 def make_item(title, url, date):
     title = title.strip() if isinstance(title, str) else ""
     url = url.strip() if isinstance(url, str) else ""
     date = date.strip() if isinstance(date, str) else ""
     if not title or not is_http(url):
         return None
-    return {"title": title, "url": url, "published": parse_date(date)}
+    return {"title": title, "url": canonical(url), "published": parse_date(date)}
 
 
 def parse_json_feed(data, limit):
@@ -251,7 +258,10 @@ def load_list(path):
 
 
 def load_cache():
-    return [f for f in load_list(CACHE) if isinstance(f, dict) and isinstance(f.get("items"), list)]
+    entries = [f for f in load_list(CACHE) if isinstance(f, dict) and isinstance(f.get("items"), list)]
+    for f in entries:
+        f["items"] = [dict(i, url=canonical(i["url"])) if isinstance(i, dict) and isinstance(i.get("url"), str) else i for i in f["items"]]
+    return entries
 
 
 def save_cache(entries):
@@ -262,12 +272,12 @@ def save_cache(entries):
 
 
 def load_seen():
-    return [u for u in load_list(SEEN) if isinstance(u, str)]
+    return [canonical(u) for u in load_list(SEEN) if isinstance(u, str)]
 
 
 def update_seen(urls, mark):
     seen = load_seen()
-    urls = [u.strip() for u in urls]
+    urls = [canonical(u.strip()) for u in urls]
     if mark:
         new = [u for u in dict.fromkeys(urls) if is_http(u)]
         seen = [u for u in seen if u not in set(new)] + new
@@ -323,6 +333,17 @@ def run(feeds, limit=LIMIT):
     return results
 
 
+def dedupe(results):
+    urls = set()
+    for r in results:
+        fresh = []
+        for i in r["items"]:
+            if i["url"] not in urls:
+                urls.add(i["url"])
+                fresh.append(i)
+        r["items"] = fresh
+
+
 def parse_limit(args):
     try:
         n = int(args[args.index("--limit") + 1])
@@ -352,6 +373,7 @@ def main():
     else:
         feeds, error = load_feeds()
         out = run(feeds, parse_limit(args))
+        dedupe(out)
         if error:
             out.insert(0, {"name": "Feed config", "url": "", "items": [], "error": error})
     sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode("utf-8") + b"\n")

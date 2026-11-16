@@ -117,6 +117,9 @@ field to the plugin's entry in `~/.config/omarchy/shell.json`, for example
 - Read state is stored in `~/.cache/omarchy-newsfeed/seen.json`. The 2000 most
   recently read headlines are kept. If this file is deleted, headlines show as
   unread again.
+- Links are stored without tracking parameters (`utm_*`, `fbclid`, `gclid`), so
+  the same article keeps its read state even when a feed adds them. A headline
+  that appears in more than one feed is listed once, under the first feed.
 
 ## Security and privacy
 

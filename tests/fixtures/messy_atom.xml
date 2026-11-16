@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Messy Atom</title>
+  <link rel="self" href="https://example.test/atom.xml"/>
+  <entry>
+    <title>Two links</title>
+    <link rel="self" href="https://example.test/self"/>
+    <link rel="alternate" href="https://example.test/first"/>
+    <link href="https://example.test/second"/>
+    <updated>2024-03-01T08:30:00-05:00</updated>
+  </entry>
+  <entry>
+    <title>Published only</title>
+    <link href="https://example.test/p"/>
+    <published>2024-03-02T09:00:00Z</published>
+  </entry>
+  <entry>
+    <title>Related link only</title>
+    <link rel="related" href="https://example.test/r"/>
+  </entry>
+</feed>

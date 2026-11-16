@@ -154,14 +154,28 @@ def parse_date(value):
 
 
 def make_item(title, url, date):
-    title = (title or "").strip()
-    url = (url or "").strip()
+    title = title.strip() if isinstance(title, str) else ""
+    url = url.strip() if isinstance(url, str) else ""
+    date = date.strip() if isinstance(date, str) else ""
     if not title or not is_http(url):
         return None
-    return {"title": title, "url": url, "published": parse_date((date or "").strip())}
+    return {"title": title, "url": url, "published": parse_date(date)}
+
+
+def parse_json_feed(data, limit):
+    entries = json.loads(data).get("items")
+    items = []
+    for it in entries if isinstance(entries, list) else []:
+        if not isinstance(it, dict):
+            continue
+        item = make_item(it.get("title"), it.get("url") or it.get("external_url"), it.get("date_published") or it.get("date_modified"))
+        if item: items.append(item)
+    return items[:limit]
 
 
 def parse(data, limit=LIMIT):
+    if data.lstrip()[:1] == b"{":
+        return parse_json_feed(data, limit)
     if b"<!DOCTYPE" in data.upper():
         raise ValueError("DTD declarations are not allowed")
     root = ET.fromstring(data)
@@ -172,7 +186,8 @@ def parse(data, limit=LIMIT):
     for en in root.iter(ATOM_NS + "entry"):  # Atom
         links = [l for l in en.findall(ATOM_NS + "link") if l.get("rel", "alternate") == "alternate"]
         href = links[0].get("href") if links else ""
-        item = make_item(en.findtext(ATOM_NS + "title"), href, en.findtext(ATOM_NS + "updated"))
+        date = en.findtext(ATOM_NS + "updated") or en.findtext(ATOM_NS + "published")
+        item = make_item(en.findtext(ATOM_NS + "title"), href, date)
         if item: items.append(item)
     return items[:limit]
 

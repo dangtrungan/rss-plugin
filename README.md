@@ -1,6 +1,6 @@
 # News Feed
 
-An on-demand RSS and Atom reader for Omarchy 4.x. It adds an icon to the
+An on-demand RSS, Atom, and JSON Feed reader for Omarchy 4.x. It adds an icon to the
 right side of the bar, with a count of unread headlines when there are any.
 Clicking the icon opens a panel with headlines from your feeds, newest first,
 with the domain of each article shown beside its time (for example

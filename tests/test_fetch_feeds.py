@@ -19,6 +19,44 @@ ff = importlib.util.module_from_spec(spec)
 loader.exec_module(ff)
 
 
+FIXTURES = pathlib.Path(__file__).resolve().parent / "fixtures"
+
+
+class FixtureTest(unittest.TestCase):
+    def load(self, name):
+        return ff.parse((FIXTURES / name).read_bytes())
+
+    def test_messy_rss(self):
+        self.assertEqual(self.load("messy_rss.xml"), [
+            {"title": "Named zone date", "url": "https://example.test/a?utm_source=rss&id=1", "published": "2024-01-01T12:00:00+00:00"},
+            {"title": "No date at all", "url": "https://example.test/b", "published": ""},
+            {"title": "ISO fallback date", "url": "https://example.test/c", "published": "2024-01-02T10:00:00+00:00"},
+            {"title": "Garbage date", "url": "https://example.test/d", "published": ""},
+        ])
+
+    def test_messy_atom(self):
+        self.assertEqual(self.load("messy_atom.xml"), [
+            {"title": "Two links", "url": "https://example.test/first", "published": "2024-03-01T13:30:00+00:00"},
+            {"title": "Published only", "url": "https://example.test/p", "published": "2024-03-02T09:00:00+00:00"},
+        ])
+
+    def test_messy_json_feed(self):
+        self.assertEqual(self.load("messy_jsonfeed.json"), [
+            {"title": "With date", "url": "https://example.test/j1", "published": "2024-04-01T12:00:00+00:00"},
+            {"title": "External link", "url": "https://example.test/j2", "published": ""},
+            {"title": "Date is a number", "url": "https://example.test/j3", "published": ""},
+            {"title": "Missing date", "url": "https://example.test/j4", "published": ""},
+        ])
+
+    def test_doctype_is_rejected_before_parsing(self):
+        with self.assertRaisesRegex(ValueError, "DTD"):
+            ff.parse(b'<!DOCTYPE rss [<!ENTITY a "b">]><rss><channel/></rss>')
+
+    def test_json_feed_with_bad_items_has_no_items(self):
+        self.assertEqual(ff.parse(b'{"items": 5}'), [])
+        self.assertEqual(ff.parse(b'{"items": [1, "x", null]}'), [])
+
+
 class ReadBodyTest(unittest.TestCase):
     class Chunks:
         def __init__(self, *chunks):

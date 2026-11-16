@@ -1,0 +1,12 @@
+{
+  "version": "https://jsonfeed.org/version/1.1",
+  "title": "Messy JSON Feed",
+  "items": [
+    {"id": "1", "url": "https://example.test/j1", "title": "With date", "date_published": "2024-04-01T12:00:00Z"},
+    {"id": "2", "external_url": "https://example.test/j2", "title": "External link"},
+    {"id": "3", "url": "https://example.test/j3", "title": "Date is a number", "date_published": 20240401},
+    {"id": "4", "url": "https://example.test/j4", "title": "Missing date"},
+    {"id": "5", "url": "ftp://example.test/j5", "title": "Not http"},
+    {"id": "6", "url": "https://example.test/j6"}
+  ]
+}

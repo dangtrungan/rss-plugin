@@ -67,17 +67,15 @@ def read_config():
         return None, "feeds.json is not valid JSON"
     if not isinstance(raw, list):
         return None, "feeds.json must be a JSON list"
-    if not any(valid_feed(e) for e in raw):
-        return [dict(f) for f in DEFAULT], None
     return raw, None
 
 
 def load_feeds():
     raw, error = read_config()
     if error:
-        return DEFAULT
+        return DEFAULT, error
     feeds = [f for f in (valid_feed(e) for e in raw[:MAX_FEEDS]) if f]
-    return feeds or DEFAULT
+    return feeds or DEFAULT, None
 
 
 def fail(message):
@@ -301,7 +299,10 @@ def main():
     elif cmd == "--toggle-feed":
         out = toggle_feed(args[1] if len(args) > 1 else "")
     else:
-        out = run(load_feeds(), parse_limit(args))
+        feeds, error = load_feeds()
+        out = run(feeds, parse_limit(args))
+        if error:
+            out.insert(0, {"name": "Feed config", "url": "", "items": [], "error": error})
     sys.stdout.buffer.write(json.dumps(out, ensure_ascii=False).encode("utf-8") + b"\n")
 
 

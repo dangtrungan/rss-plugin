@@ -1,5 +1,6 @@
 import importlib.machinery
 import importlib.util
+import io
 import json
 import os
 import pathlib
@@ -195,13 +196,39 @@ class FeedEditTest(FilesTest):
     def test_remove_refuses_last_valid_feed(self):
         ff.CONFIG.write_text(json.dumps([{"name": "A", "url": "https://a.test/rss"}]))
         self.assertFalse(ff.remove_feed("https://a.test/rss")["ok"])
-        self.assertEqual(ff.load_feeds(), [{"name": "A", "url": "https://a.test/rss", "enabled": True, "limit": None}])
+        self.assertEqual(ff.load_feeds()[0], [{"name": "A", "url": "https://a.test/rss", "enabled": True, "limit": None}])
 
     def test_broken_config_is_never_overwritten(self):
         ff.CONFIG.write_text("{ not json, but my notes")
         self.assertFalse(ff.add_feed("https://b.test/rss")["ok"])
         self.assertFalse(ff.remove_feed("https://b.test/rss")["ok"])
         self.assertEqual(ff.CONFIG.read_text(), "{ not json, but my notes")
+
+    def test_all_invalid_entries_are_kept_when_adding(self):
+        ff.CONFIG.write_text(json.dumps([{"name": "", "url": "https://bad.test"}, "my notes"]))
+        self.assertTrue(ff.add_feed("https://b.test/rss")["ok"])
+        self.assertEqual(json.loads(ff.CONFIG.read_text()), [
+            {"name": "", "url": "https://bad.test"},
+            "my notes",
+            {"name": "b.test", "url": "https://b.test/rss"},
+        ])
+
+    def test_broken_config_falls_back_to_defaults_with_error(self):
+        ff.CONFIG.write_text("{ not json")
+        feeds, error = ff.load_feeds()
+        self.assertEqual(feeds, ff.DEFAULT)
+        self.assertEqual(error, "feeds.json is not valid JSON")
+
+    def test_run_reports_broken_config_as_a_failed_entry(self):
+        ff.CONFIG.write_text("{ not json")
+        ff.fetch = lambda f, *_: {"name": f["name"], "items": [], "error": None}
+        buf = io.BytesIO()
+        stdout = io.TextIOWrapper(buf, encoding="utf-8")
+        with unittest.mock.patch.object(sys, "argv", ["fetch-feeds"]), unittest.mock.patch.object(sys, "stdout", stdout):
+            ff.main()
+        out = json.loads(buf.getvalue())
+        self.assertEqual(out[0]["error"], "feeds.json is not valid JSON")
+        self.assertEqual([r["name"] for r in out[1:]], ["Hacker News", "Omarchy News"])
 
 
 if __name__ == "__main__":

@@ -511,6 +511,10 @@ Panel {
               wrapMode: Text.WordWrap
               textFormat: Text.PlainText
               text: "Failed: " + String(modelData.name) + " (" + String(modelData.error) + ")"
+                + (modelData.url
+                  ? " · failing since " + root.relativeTime(modelData.failing_since)
+                    + ", last OK " + (modelData.last_ok ? root.relativeTime(modelData.last_ok) : "never")
+                  : "")
               color: root.dimForeground
               font.family: root.contentFontFamily
               font.pixelSize: Style.font.bodySmall
@@ -571,7 +575,8 @@ Panel {
                   text: root.managing
                     ? (String(itemRow.modelData.url) === root.pendingRemove
                         ? "Press x again to remove"
-                        : (itemRow.isDisabled ? "disabled  " : "") + String(itemRow.modelData.url || ""))
+                        : (itemRow.isDisabled ? "disabled  " : "") + String(itemRow.modelData.url || "")
+                          + (itemRow.modelData.last_ok ? "  · last OK " + root.relativeTime(itemRow.modelData.last_ok) : ""))
                     : root.relativeTime(itemRow.modelData.published) + "  " + String(itemRow.modelData.source || "")
                   color: root.meta
                   font.family: root.contentFontFamily

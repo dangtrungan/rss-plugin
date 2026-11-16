@@ -292,11 +292,19 @@ def run(feeds, limit=LIMIT):
     cached = {f.get("url"): f for f in load_cache()}
     with ThreadPoolExecutor(max_workers=8) as pool:
         results = list(pool.map(lambda f: fetch_one(f, limit, cached.get(f["url"])), feeds))
+    now = utc_iso(datetime.datetime.now(datetime.timezone.utc))
     for feed, r in zip(feeds, results):
+        prior = cached.get(feed["url"], {})
         r["url"] = feed["url"]
-        if r["error"] and feed["url"] in cached:
-            r["items"] = cached[feed["url"]]["items"]
-    save_cache([{"name": r["name"], "url": r["url"], "items": r["items"], "disabled": bool(r.get("disabled")), "etag": r.get("etag"), "modified": r.get("modified")} for r in results])
+        r["last_ok"] = prior.get("last_ok")
+        r["failing_since"] = None
+        if r["error"]:
+            r["failing_since"] = prior.get("failing_since") or now
+            if feed["url"] in cached:
+                r["items"] = prior["items"]
+        elif not r.get("disabled"):
+            r["last_ok"] = now
+    save_cache([{k: r.get(k) for k in ("name", "url", "items", "disabled", "etag", "modified", "last_ok", "failing_since")} for r in results])
     return results
 
 

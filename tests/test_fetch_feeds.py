@@ -79,7 +79,26 @@ class CacheFallbackTest(FilesTest):
 
         self.assertEqual(results[0]["items"], [item])
         self.assertEqual(results[0]["error"], "timed out")
-        self.assertEqual(ff.load_cache(), [{"name": "A", "url": "https://a.test/rss", "items": [item], "disabled": False, "etag": None, "modified": None}])
+        cached = ff.load_cache()[0]
+        self.assertEqual(cached["items"], [item])
+        self.assertIsNotNone(cached["failing_since"])
+        self.assertIsNotNone(cached["last_ok"])
+
+    def test_staleness_tracks_last_success_and_first_failure(self):
+        ok = {"name": "A", "items": [], "error": None}
+        bad = {"name": "A", "items": [], "error": "timed out"}
+        feeds = [{"name": "A", "url": "https://a.test/rss"}]
+        ff.fetch = lambda f, *_: dict(ok)
+        last_ok = ff.run(feeds)[0]["last_ok"]
+        ff.fetch = lambda f, *_: dict(bad)
+        first = ff.run(feeds)[0]
+        self.assertEqual(first["last_ok"], last_ok)
+        self.assertIsNotNone(first["failing_since"])
+        with unittest.mock.patch.object(ff, "utc_iso", return_value="2030-01-01T00:00:00+00:00"):
+            again = ff.run(feeds)[0]
+        self.assertEqual(again["failing_since"], first["failing_since"])
+        ff.fetch = lambda f, *_: dict(ok)
+        self.assertIsNone(ff.run(feeds)[0]["failing_since"])
 
     def test_fallback_matches_by_url_not_name(self):
         item = {"title": "Old", "url": "https://a.test/1", "published": ""}
@@ -129,7 +148,7 @@ class FeedOptionsTest(FilesTest):
             {"name": "Plain", "url": "https://c.test/rss"},
         ], limit=15)
         self.assertEqual(seen, [("On", 3), ("Plain", 15)])
-        self.assertEqual(results[1], {"name": "Off", "items": [], "error": None, "disabled": True, "url": "https://b.test/rss"})
+        self.assertEqual(results[1], {"name": "Off", "items": [], "error": None, "disabled": True, "url": "https://b.test/rss", "last_ok": None, "failing_since": None})
 
     def test_toggle_disables_and_enables_and_keeps_one_enabled(self):
         ff.CONFIG.write_text(json.dumps([

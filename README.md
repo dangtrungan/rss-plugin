@@ -103,8 +103,10 @@ field to the plugin's entry in `~/.config/omarchy/shell.json`, for example
   - `x` removes the selected feed. Press `x` twice: the first press asks, the
     second removes it.
   - `t` disables or enables the selected feed.
-- A feed that fails shows its error under its own name. The other feeds still
-  load.
+- A feed that fails shows its error under its own name, with when it started
+  failing and when it last worked, for example `failing since 2d ago, last OK
+  5d ago`. The other feeds still load. In feed management, each feed shows
+  when it last worked.
 - The last headlines are cached in `~/.cache/omarchy-newsfeed/cache.json`
   (or `$XDG_CACHE_HOME`). Opening the panel shows them right away while the
   feeds refresh. A feed that fails keeps its cached headlines until it

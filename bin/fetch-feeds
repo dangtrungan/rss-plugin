@@ -5,6 +5,7 @@ import json
 import os
 import sys
 import time
+import urllib.error
 import urllib.request
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor
@@ -189,13 +190,26 @@ def read_body(r, deadline):
             raise ValueError("feed is larger than 2 MB")
 
 
-def fetch(feed, limit=LIMIT):
+def fetch(feed, limit=LIMIT, prior=None):
+    prior = prior or {}
     try:
         deadline = time.monotonic() + DEADLINE
-        req = urllib.request.Request(feed["url"], headers={"User-Agent": UA})
-        with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
-            data = read_body(r, deadline)
-        return {"name": feed["name"], "items": parse(data, limit), "error": None}
+        headers = {"User-Agent": UA}
+        if prior.get("etag"):
+            headers["If-None-Match"] = prior["etag"]
+        if prior.get("modified"):
+            headers["If-Modified-Since"] = prior["modified"]
+        req = urllib.request.Request(feed["url"], headers=headers)
+        try:
+            with urllib.request.urlopen(req, timeout=TIMEOUT) as r:
+                data = read_body(r, deadline)
+                etag, modified = r.headers.get("ETag"), r.headers.get("Last-Modified")
+        except urllib.error.HTTPError as e:
+            if e.code != 304:
+                raise
+            e.close()
+            return {"name": feed["name"], "items": prior["items"][:limit], "error": None, "etag": prior.get("etag"), "modified": prior.get("modified")}
+        return {"name": feed["name"], "items": parse(data, limit), "error": None, "etag": etag, "modified": modified}
     except Exception as e:
         return {"name": feed["name"], "items": [], "error": str(e) or type(e).__name__}
 
@@ -268,21 +282,21 @@ def tighten_old_files():
             pass
 
 
-def fetch_one(feed, limit):
+def fetch_one(feed, limit, prior=None):
     if feed.get("enabled") is False:
         return {"name": feed["name"], "items": [], "error": None, "disabled": True}
-    return fetch(feed, feed.get("limit") or limit)
+    return fetch(feed, feed.get("limit") or limit, prior)
 
 
 def run(feeds, limit=LIMIT):
+    cached = {f.get("url"): f for f in load_cache()}
     with ThreadPoolExecutor(max_workers=8) as pool:
-        results = list(pool.map(lambda f: fetch_one(f, limit), feeds))
-    old = {f.get("url"): f["items"] for f in load_cache()}
+        results = list(pool.map(lambda f: fetch_one(f, limit, cached.get(f["url"])), feeds))
     for feed, r in zip(feeds, results):
         r["url"] = feed["url"]
-        if r["error"] and feed["url"] in old:
-            r["items"] = old[feed["url"]]
-    save_cache([{"name": r["name"], "url": r["url"], "items": r["items"], "disabled": bool(r.get("disabled"))} for r in results])
+        if r["error"] and feed["url"] in cached:
+            r["items"] = cached[feed["url"]]["items"]
+    save_cache([{"name": r["name"], "url": r["url"], "items": r["items"], "disabled": bool(r.get("disabled")), "etag": r.get("etag"), "modified": r.get("modified")} for r in results])
     return results
 
 

@@ -109,6 +109,9 @@ field to the plugin's entry in `~/.config/omarchy/shell.json`, for example
   (or `$XDG_CACHE_HOME`). Opening the panel shows them right away while the
   feeds refresh. A feed that fails keeps its cached headlines until it
   recovers or is removed. Cached headlines never expire on their own.
+  Feeds that send an `ETag` or `Last-Modified` header are asked only for
+  changes on later refreshes. If nothing changed, the cached headlines are
+  reused, which saves bandwidth for both you and the feed host.
 - Read state is stored in `~/.cache/omarchy-newsfeed/seen.json`. The 2000 most
   recently read headlines are kept. If this file is deleted, headlines show as
   unread again.

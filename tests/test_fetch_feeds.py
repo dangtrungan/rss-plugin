@@ -1,4 +1,5 @@
 import importlib.machinery
+import email.message
 import importlib.util
 import io
 import json
@@ -9,6 +10,7 @@ import tempfile
 import time
 import unittest
 import unittest.mock
+import urllib.error
 
 SCRIPT = pathlib.Path(__file__).resolve().parent.parent / "bin" / "fetch-feeds"
 loader = importlib.machinery.SourceFileLoader("fetch_feeds", str(SCRIPT))
@@ -77,7 +79,7 @@ class CacheFallbackTest(FilesTest):
 
         self.assertEqual(results[0]["items"], [item])
         self.assertEqual(results[0]["error"], "timed out")
-        self.assertEqual(ff.load_cache(), [{"name": "A", "url": "https://a.test/rss", "items": [item], "disabled": False}])
+        self.assertEqual(ff.load_cache(), [{"name": "A", "url": "https://a.test/rss", "items": [item], "disabled": False, "etag": None, "modified": None}])
 
     def test_fallback_matches_by_url_not_name(self):
         item = {"title": "Old", "url": "https://a.test/1", "published": ""}
@@ -120,7 +122,7 @@ class FeedOptionsTest(FilesTest):
 
     def test_disabled_feed_is_not_fetched_and_per_feed_limit_is_used(self):
         seen = []
-        ff.fetch = lambda f, limit: seen.append((f["name"], limit)) or {"name": f["name"], "items": [], "error": None}
+        ff.fetch = lambda f, limit, *_: seen.append((f["name"], limit)) or {"name": f["name"], "items": [], "error": None}
         results = ff.run([
             {"name": "On", "url": "https://a.test/rss", "enabled": True, "limit": 3},
             {"name": "Off", "url": "https://b.test/rss", "enabled": False, "limit": None},
@@ -146,6 +148,52 @@ class FeedOptionsTest(FilesTest):
             {"name": "B", "url": "https://b.test/rss", "enabled": False},
         ]))
         self.assertFalse(ff.remove_feed("https://a.test/rss")["ok"])
+
+
+class ConditionalTest(FilesTest):
+    url = "https://a.test/rss"
+
+    def _run_with(self, respond):
+        calls = []
+
+        def fake_urlopen(req, timeout):
+            calls.append(req)
+            return respond()
+
+        with unittest.mock.patch.object(ff.urllib.request, "urlopen", fake_urlopen):
+            results = ff.run([{"name": "A", "url": self.url}])
+        return results, calls[0]
+
+    def test_304_reuses_cached_items_and_sends_validators(self):
+        item = {"title": "Old", "url": "https://a.test/1", "published": ""}
+        ff.save_cache([{"name": "A", "url": self.url, "items": [item], "etag": '"v1"', "modified": "Mon, 01 Jan 2024 00:00:00 GMT"}])
+
+        def not_modified():
+            raise urllib.error.HTTPError(self.url, 304, "Not Modified", {}, None)
+
+        results, req = self._run_with(not_modified)
+        self.assertEqual(req.get_header("If-none-match"), '"v1"')
+        self.assertEqual(req.get_header("If-modified-since"), "Mon, 01 Jan 2024 00:00:00 GMT")
+        self.assertEqual(results[0]["items"], [item])
+        self.assertIsNone(results[0]["error"])
+        self.assertEqual(ff.load_cache()[0]["etag"], '"v1"')
+
+    def test_200_stores_new_validators(self):
+        headers = email.message.Message()
+        headers["ETag"] = '"v2"'
+        headers["Last-Modified"] = "Tue, 02 Jan 2024 00:00:00 GMT"
+        body = b'<rss><channel><item><title>New</title><link>https://a.test/2</link></item></channel></rss>'
+
+        def ok():
+            response = io.BytesIO(body)
+            response.headers = headers
+            return response
+
+        results, req = self._run_with(ok)
+        self.assertIsNone(req.get_header("If-none-match"))
+        self.assertEqual(results[0]["items"][0]["title"], "New")
+        cached = ff.load_cache()[0]
+        self.assertEqual((cached["etag"], cached["modified"]), ('"v2"', "Tue, 02 Jan 2024 00:00:00 GMT"))
 
 
 class ReadStateTest(FilesTest):
